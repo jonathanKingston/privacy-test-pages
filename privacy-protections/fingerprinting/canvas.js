@@ -37,6 +37,77 @@ function generateDataURLWithCode (codeInput, alpha = 255) {
 }
 
 const tests = [
+    {
+        id: 'onion skin comparison',
+        category: 'resistance',
+        value: async () => {
+            const size = 2000 * 200;
+            // Make a unique int per pixel for the channels
+            function checkPixel(d, i) {
+                return d[i] + (d[i+1] * 10 ** 3) + (d[i+2] * 10 ** 6) + (d[i+3] * 10 ** 9)
+            }
+
+            function shouldIgnorePixel(d, i) {
+                if (d[i+3] === 0) {
+                    return true;
+                }
+                return false;
+            }
+
+            const pixelData = [];
+            let randData;
+            // Compare 10 canvases and ensure per pixel there is more than one result
+            for (let i = 0; i < 10; i++) {
+                const canvasElement = createCanvas(2000, 200);
+                const canvasContext = canvasElement.getContext('2d');
+
+                // Generate rand data for all canvases to use
+                if (i === 0) {
+                    const canvasDataBlank = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                    for (let i = 0; i < size*4; i += 4) {
+                        canvasDataBlank.data[i] = Math.floor(Math.random() * 256);
+                        canvasDataBlank.data[i+1] = Math.floor(Math.random() * 256);
+                        canvasDataBlank.data[i+2] = Math.floor(Math.random() * 256);
+                        canvasDataBlank.data[i+3] = 255;
+                    }
+                    randData = canvasDataBlank;
+                }
+                canvasContext.putImageData(randData, 0, 0);
+
+                // Draw a unique pixel in top left corner
+                const ctx = canvasElement.getContext('2d');
+                ctx.fillStyle = `#f6${i}`;
+                ctx.fillRect(0, 0, 1, 1);
+
+                const canvasData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                // Start at pixel 1 as pixel 0 was used for making the canvas random
+                for (let j = 0; j < size; j++) {
+                    if (i === 0) {
+                        pixelData.push(new Set());
+                    }
+                    if (!shouldIgnorePixel(canvasData.data, j*4)) {
+                        pixelData[j].add(checkPixel(canvasData.data, j*4));
+                    }
+                }
+            }
+
+            let sizeCount = [];
+            for (let i = 0; i < size; i++) {
+                // The number of unique pixel data across the slices
+                const pixelSize = pixelData[i].size;
+                if (!(pixelSize in sizeCount)) {
+                  sizeCount[pixelSize] = 0;
+                }
+                sizeCount[pixelSize] += 1
+            }
+            ok(sizeCount[1] + sizeCount[0] != size, 'Should not only have single peturbed changes');
+            ok(sizeCount[2] > 5000, 'Should have a resonable distribution of modified pixels for changes 2');
+            ok(sizeCount[3] > 5000, 'Should have a resonable distribution of modified pixels for changes 3');
+            ok(sizeCount[4] > 5000, 'Should have a resonable distribution of modified pixels for changes 4');
+            return sizeCount;
+        }
+    },
+
     // Render a random 4k canvas and then get the performance of getting the pixels
     {
         id: 'random noise performance',
@@ -294,7 +365,7 @@ const tests = [
             ok(expectedValues.includes(dataURL), `Generated code should return expected response: ${dataURL}`);
             return dataURL;
         }
-    }
+    },
 ];
 
 async function init () {
